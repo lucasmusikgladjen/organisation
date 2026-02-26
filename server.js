@@ -54,7 +54,9 @@ function extractError(err) {
   return err.message || 'Unknown error';
 }
 
-// Helper: make Airtable request using native https
+// Helper: make Airtable request using native https (with timeout)
+const REQUEST_TIMEOUT_MS = 15000;
+
 function airtableRequest(method, urlPath, body) {
   if (!AIRTABLE_API_KEY) {
     return Promise.reject({ status: 500, body: JSON.stringify({ error: { message: 'AIRTABLE_API_KEY is not configured on the server' } }) });
@@ -86,10 +88,30 @@ function airtableRequest(method, urlPath, body) {
       });
     });
 
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error('Airtable request timed out'));
+    });
+
     req.on('error', reject);
     if (body) req.write(JSON.stringify(body));
     req.end();
   });
+}
+
+// Wrapper with retry + backoff for rate limiting (429)
+async function airtableRequestWithRetry(method, urlPath, body, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await airtableRequest(method, urlPath, body);
+    } catch (err) {
+      if (err.status === 429 && attempt < retries) {
+        const delay = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 // GET /api/notes - Fetch all records (handles pagination)
@@ -163,7 +185,7 @@ app.get('/api/notes', async (req, res) => {
 app.post('/api/notes', async (req, res) => {
   try {
     const { fields } = req.body;
-    const data = await airtableRequest('POST', '', {
+    const data = await airtableRequestWithRetry('POST', '', {
       records: [{ fields }],
     });
     res.json(data.records[0]);
@@ -175,17 +197,27 @@ app.post('/api/notes', async (req, res) => {
 
 // PATCH/POST /api/notes/batch - Batch update (up to 10 records per Airtable limit)
 // POST is also accepted for sendBeacon compatibility (sendBeacon only sends POST)
+// Returns partial results: { records: [...succeeded], errors: [...failed] }
 async function handleBatchUpdate(req, res) {
   try {
     const { records } = req.body;
     // Airtable allows max 10 records per batch update
     const results = [];
+    const errors = [];
     for (let i = 0; i < records.length; i += 10) {
       const batch = records.slice(i, i + 10);
-      const data = await airtableRequest('PATCH', '', { records: batch });
-      results.push(...data.records);
+      try {
+        const data = await airtableRequestWithRetry('PATCH', '', { records: batch });
+        results.push(...data.records);
+      } catch (err) {
+        console.error('Batch chunk error (records ' + i + '-' + (i + batch.length - 1) + '):', err);
+        errors.push({
+          ids: batch.map(r => r.id),
+          error: extractError(err),
+        });
+      }
     }
-    res.json({ records: results });
+    res.json({ records: results, errors });
   } catch (err) {
     console.error('Batch update error:', err);
     res.status(err.status || 500).json({ error: extractError(err) });
@@ -198,7 +230,7 @@ app.post('/api/notes/batch', handleBatchUpdate);
 app.patch('/api/notes/:id', async (req, res) => {
   try {
     const { fields } = req.body;
-    const data = await airtableRequest('PATCH', '', {
+    const data = await airtableRequestWithRetry('PATCH', '', {
       records: [{ id: req.params.id, fields }],
     });
     res.json(data.records[0]);
