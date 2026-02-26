@@ -7,16 +7,16 @@
 }
 
 :root {
-  --bg: #1a0a2e;
-  --note-bg: #0d0d0d;
-  --note-border: #FF00FF;
-  --titlebar-bg: #FF00FF;
-  --titlebar-fg: #000000;
-  --toolbar-bg: #120825;
-  --text: #39FF14;
-  --accent: #00BFFF;
-  --shadow: #FF6EC7;
-  --highlight: #FFD700;
+  --bg: #008080;
+  --note-bg: #ffffff;
+  --note-border: #000000;
+  --titlebar-bg: #000080;
+  --titlebar-fg: #ffffff;
+  --toolbar-bg: #c0c0c0;
+  --text: #000000;
+  --accent: #000080;
+  --shadow: #808080;
+  --highlight: #ffffff;
   --font: 'IBM Plex Mono', 'Courier New', Courier, monospace;
 }
 
@@ -149,11 +149,11 @@ html, body {
   font-family: var(--font);
   font-size: 9px;
   line-height: 1.15;
-  color: var(--accent);
+  color: var(--shadow);
   text-align: center;
   padding: 8px 6px;
   background: var(--note-bg);
-  border-top: 1px solid var(--note-border);
+  border-top: 1px solid #ddd;
   white-space: pre;
   pointer-events: none;
   user-select: none;
