@@ -12,7 +12,12 @@
     dirtyContent: new Map(),  // id -> { field, value } content changes to save
     activeNoteId: null,
     saving: false,
+    zoom: 1,                  // current zoom level
   };
+
+  const ZOOM_MIN = 0.25;
+  const ZOOM_MAX = 3;
+  const ZOOM_STEP = 0.1;
 
   const CACHE_KEY = 'notecanvas_cache';
   const SAVE_DEBOUNCE_MS = 3000;    // debounce content saves by 3s
@@ -22,9 +27,11 @@
 
   // ---- DOM refs ----
   const canvas = document.getElementById('canvas');
+  const canvasContainer = document.getElementById('canvas-container');
   const btnNew = document.getElementById('btn-new');
   const btnSave = document.getElementById('btn-save');
   const saveStatus = document.getElementById('save-status');
+  const zoomIndicator = document.getElementById('zoom-indicator');
   const modalOverlay = document.getElementById('modal-overlay');
   const modalPassword = document.getElementById('modal-password');
   const modalOk = document.getElementById('modal-ok');
@@ -169,16 +176,14 @@
       e.preventDefault();
       document.body.classList.add('dragging');
 
-      const rect = el.getBoundingClientRect();
-      const containerRect = canvas.parentElement.getBoundingClientRect();
       startX = e.clientX;
       startY = e.clientY;
       origLeft = parseInt(el.style.left) || 0;
       origTop = parseInt(el.style.top) || 0;
 
       function onMove(e2) {
-        const dx = e2.clientX - startX;
-        const dy = e2.clientY - startY;
+        const dx = (e2.clientX - startX) / state.zoom;
+        const dy = (e2.clientY - startY) / state.zoom;
         const newX = Math.max(0, origLeft + dx);
         const newY = Math.max(0, origTop + dy);
         el.style.left = newX + 'px';
@@ -228,8 +233,8 @@
       const startH = el.offsetHeight;
 
       function onMove(e2) {
-        const w = Math.max(180, startW + (e2.clientX - startX));
-        const h = Math.max(80, startH + (e2.clientY - startY));
+        const w = Math.max(180, startW + (e2.clientX - startX) / state.zoom);
+        const h = Math.max(80, startH + (e2.clientY - startY) / state.zoom);
         el.style.width = w + 'px';
         el.style.height = h + 'px';
       }
@@ -453,10 +458,10 @@
   // ---- Create new note ----
   async function createNote() {
     // Find an empty spot
-    const scrollLeft = canvas.parentElement.scrollLeft;
-    const scrollTop = canvas.parentElement.scrollTop;
-    const x = scrollLeft + 100 + Math.floor(Math.random() * 200);
-    const y = scrollTop + 100 + Math.floor(Math.random() * 200);
+    const scrollLeft = canvasContainer.scrollLeft;
+    const scrollTop = canvasContainer.scrollTop;
+    const x = Math.floor((scrollLeft + 100) / state.zoom + Math.random() * 200);
+    const y = Math.floor((scrollTop + 100) / state.zoom + Math.random() * 200);
 
     try {
       showStatus('creating...');
@@ -542,6 +547,54 @@
       canvas.appendChild(el);
     }
   }
+
+  // ---- Zoom ----
+  function updateZoom(newZoom, pivotX, pivotY) {
+    const oldZoom = state.zoom;
+    state.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, newZoom));
+
+    canvas.style.transform = `scale(${state.zoom})`;
+
+    // Update the scroller wrapper so scrollbars reflect the zoomed size
+    const scroller = document.getElementById('canvas-scroller');
+    scroller.style.width = (4000 * state.zoom) + 'px';
+    scroller.style.height = (4000 * state.zoom) + 'px';
+
+    // Adjust scroll to keep the point under cursor fixed
+    if (pivotX !== undefined && pivotY !== undefined) {
+      const scrollLeft = canvasContainer.scrollLeft;
+      const scrollTop = canvasContainer.scrollTop;
+
+      // The canvas point under the cursor before zoom
+      const canvasX = (scrollLeft + pivotX) / oldZoom;
+      const canvasY = (scrollTop + pivotY) / oldZoom;
+
+      // Where that point ends up after zoom
+      canvasContainer.scrollLeft = canvasX * state.zoom - pivotX;
+      canvasContainer.scrollTop = canvasY * state.zoom - pivotY;
+    }
+
+    zoomIndicator.textContent = Math.round(state.zoom * 100) + '%';
+  }
+
+  canvasContainer.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+
+    const rect = canvasContainer.getBoundingClientRect();
+    const pivotX = e.clientX - rect.left;
+    const pivotY = e.clientY - rect.top;
+
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    updateZoom(state.zoom + delta, pivotX, pivotY);
+  }, { passive: false });
+
+  // Reset zoom on double-click of zoom indicator
+  zoomIndicator.addEventListener('dblclick', () => {
+    updateZoom(1);
+    canvasContainer.scrollLeft = 0;
+    canvasContainer.scrollTop = 0;
+  });
 
   // ---- Event wiring ----
   btnNew.addEventListener('click', createNote);
