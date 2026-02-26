@@ -13,7 +13,11 @@ try {
         const eqIndex = trimmed.indexOf('=');
         if (eqIndex !== -1) {
           const key = trimmed.slice(0, eqIndex).trim();
-          const val = trimmed.slice(eqIndex + 1).trim();
+          let val = trimmed.slice(eqIndex + 1).trim();
+          // Strip surrounding quotes
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
           if (!process.env[key]) process.env[key] = val;
         }
       }
@@ -27,12 +31,34 @@ const BASE_ID = 'appTiSaQRF1ePoADL';
 const TABLE_ID = 'tblBrPSBgquHNh3hD';
 const AIRTABLE_URL = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
 
+if (!AIRTABLE_API_KEY) {
+  console.error('WARNING: AIRTABLE_API_KEY is not set. All Airtable API calls will fail.');
+  console.error('  Create a .env file with: AIRTABLE_API_KEY=your_key_here');
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Helper: extract useful error message from Airtable errors
+function extractError(err) {
+  if (err.body) {
+    try {
+      const parsed = JSON.parse(err.body);
+      if (parsed.error) {
+        return typeof parsed.error === 'string' ? parsed.error : parsed.error.message || parsed.error.type || 'Airtable error';
+      }
+    } catch (_) { /* not JSON */ }
+    return err.body;
+  }
+  return err.message || 'Unknown error';
+}
+
 // Helper: make Airtable request using native https
 function airtableRequest(method, urlPath, body) {
+  if (!AIRTABLE_API_KEY) {
+    return Promise.reject({ status: 500, body: JSON.stringify({ error: { message: 'AIRTABLE_API_KEY is not configured on the server' } }) });
+  }
   const https = require('https');
   const url = urlPath ? `${AIRTABLE_URL}/${urlPath}` : AIRTABLE_URL;
 
@@ -69,6 +95,10 @@ function airtableRequest(method, urlPath, body) {
 // GET /api/notes - Fetch all records (handles pagination)
 app.get('/api/notes', async (req, res) => {
   try {
+    if (!AIRTABLE_API_KEY) {
+      return res.status(500).json({ error: 'AIRTABLE_API_KEY is not configured on the server' });
+    }
+
     let allRecords = [];
     let offset = null;
 
@@ -124,7 +154,7 @@ app.get('/api/notes', async (req, res) => {
     res.json({ records: sanitized });
   } catch (err) {
     console.error('Fetch error:', err);
-    res.status(500).json({ error: 'Failed to fetch notes' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -138,7 +168,7 @@ app.post('/api/notes', async (req, res) => {
     res.json(data.records[0]);
   } catch (err) {
     console.error('Create error:', err);
-    res.status(500).json({ error: 'Failed to create note' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -156,7 +186,7 @@ app.patch('/api/notes/batch', async (req, res) => {
     res.json({ records: results });
   } catch (err) {
     console.error('Batch update error:', err);
-    res.status(500).json({ error: 'Failed to batch update notes' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -170,7 +200,7 @@ app.patch('/api/notes/:id', async (req, res) => {
     res.json(data.records[0]);
   } catch (err) {
     console.error('Update error:', err);
-    res.status(500).json({ error: 'Failed to update note' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -212,7 +242,7 @@ app.post('/api/notes/:id/unlock', async (req, res) => {
     res.json({ content: data.fields['Anteckningar'] || '' });
   } catch (err) {
     console.error('Unlock error:', err);
-    res.status(500).json({ error: 'Failed to unlock note' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -253,7 +283,7 @@ app.delete('/api/notes/:id', async (req, res) => {
     res.json({ deleted: true, id: data.id });
   } catch (err) {
     console.error('Delete error:', err);
-    res.status(500).json({ error: 'Failed to delete note' });
+    res.status(err.status || 500).json({ error: extractError(err) });
   }
 });
 
@@ -271,3 +301,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`note-canvas running on http://localhost:${PORT}`);
 });
+
+// Export for Vercel serverless
+module.exports = app;

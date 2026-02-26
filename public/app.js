@@ -471,12 +471,13 @@
 
       const note = {
         id: record.id,
-        fields: record.fields || {
+        fields: {
           'Område': '',
           'Anteckningar': '',
           'Position X': String(x),
           'Position Y': String(y),
           'Lösenord': false,
+          ...(record.fields || {}),
         },
       };
       state.notes.push(note);
@@ -491,7 +492,7 @@
       if (titleInput) titleInput.focus();
     } catch (err) {
       console.error('Failed to create note:', err);
-      showStatus('create failed!');
+      showStatus('create failed: ' + err.message);
     }
   }
 
@@ -527,9 +528,9 @@
     } catch (err) {
       console.error('Failed to load notes:', err);
       if (!cached || cached.length === 0) {
-        showStatus('failed to load notes');
+        showStatus('load failed: ' + err.message);
       } else {
-        showStatus('offline mode');
+        showStatus('offline mode: ' + err.message);
       }
     }
   }
