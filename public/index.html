@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>anteckningar.txt</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="toolbar">
+    <span class="toolbar-title">C:\anteckningar\</span>
+    <button id="btn-new" title="New note">[ + ny ]</button>
+    <button id="btn-save" title="Save all positions">[ spara ]</button>
+    <span id="save-status"></span>
+  </div>
+
+  <div id="canvas-container">
+    <div id="canvas"></div>
+  </div>
+
+  <!-- Password modal -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal" class="modal">
+      <div class="modal-titlebar">
+        <span class="modal-title">lösenord.exe</span>
+        <button class="modal-close">[x]</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-message">Enter password:</p>
+        <input type="password" id="modal-password" autocomplete="off">
+        <div class="modal-buttons">
+          <button id="modal-ok">[ OK ]</button>
+          <button id="modal-cancel">[ Avbryt ]</button>
+        </div>
+        <p id="modal-error" class="hidden">* incorrect password *</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
