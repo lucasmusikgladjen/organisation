@@ -18,6 +18,28 @@
     <div id="canvas"></div>
   </div>
 
+  <!-- New note modal -->
+  <div id="new-note-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-titlebar">
+        <span class="modal-title">ny_anteckning.exe</span>
+        <button class="new-note-close">[x]</button>
+      </div>
+      <div class="modal-body">
+        <p>Titel:</p>
+        <input type="text" id="new-note-title" placeholder="untitled.txt" autocomplete="off">
+        <label class="checkbox-label">
+          <input type="checkbox" id="new-note-locked">
+          Lösenordsskyddad
+        </label>
+        <div class="modal-buttons">
+          <button id="new-note-ok">[ Skapa ]</button>
+          <button id="new-note-cancel">[ Avbryt ]</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Password modal -->
   <div id="modal-overlay" class="modal-overlay hidden">
     <div id="modal" class="modal">
