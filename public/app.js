@@ -651,6 +651,43 @@
     canvasContainer.scrollTop = 0;
   });
 
+  // ---- Middle mouse button pan ----
+  (function setupCanvasPan() {
+    let isPanning = false;
+    let startX, startY, scrollX0, scrollY0;
+
+    canvasContainer.addEventListener('mousedown', (e) => {
+      if (e.button !== 1) return;          // only middle mouse button
+      e.preventDefault();
+      isPanning = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      scrollX0 = canvasContainer.scrollLeft;
+      scrollY0 = canvasContainer.scrollTop;
+      document.body.classList.add('panning');
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      canvasContainer.scrollLeft = scrollX0 - dx;
+      canvasContainer.scrollTop = scrollY0 - dy;
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 1) return;
+      if (!isPanning) return;
+      isPanning = false;
+      document.body.classList.remove('panning');
+    });
+
+    // Prevent default middle-click auto-scroll on the container
+    canvasContainer.addEventListener('auxclick', (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+  })();
+
   // ---- Event wiring ----
   btnNew.addEventListener('click', createNote);
   btnSave.addEventListener('click', saveAll);
