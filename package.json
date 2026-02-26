@@ -1,0 +1,13 @@
+{
+  "name": "note-canvas",
+  "version": "1.0.0",
+  "description": "A canvas-based note taking app backed by Airtable",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

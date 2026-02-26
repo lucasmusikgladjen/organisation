@@ -1,0 +1,396 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #c0c0c0;
+  --note-bg: #ffffff;
+  --note-border: #000000;
+  --titlebar-bg: #000080;
+  --titlebar-fg: #ffffff;
+  --toolbar-bg: #d4d0c8;
+  --text: #000000;
+  --accent: #000080;
+  --shadow: #808080;
+  --highlight: #ffffff;
+  --font: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ---- Toolbar ---- */
+#toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: var(--toolbar-bg);
+  border-bottom: 2px solid var(--shadow);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 8px;
+  z-index: 1000;
+  user-select: none;
+}
+
+.toolbar-title {
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-right: 12px;
+}
+
+#toolbar button {
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--toolbar-bg);
+  border: 2px outset var(--highlight);
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+#toolbar button:hover {
+  background: #e0e0e0;
+}
+
+#toolbar button:active {
+  border-style: inset;
+}
+
+#save-status {
+  font-size: 11px;
+  color: var(--shadow);
+  margin-left: 4px;
+}
+
+/* ---- Canvas ---- */
+#canvas-container {
+  position: fixed;
+  top: 32px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 19px,
+      #b8b8b8 19px,
+      #b8b8b8 20px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 19px,
+      #b8b8b8 19px,
+      #b8b8b8 20px
+    );
+  background-color: var(--bg);
+}
+
+#canvas {
+  position: relative;
+  width: 4000px;
+  height: 4000px;
+}
+
+/* ---- Note ---- */
+.note {
+  position: absolute;
+  width: 280px;
+  min-height: 48px;
+  background: var(--note-bg);
+  border: 2px solid var(--note-border);
+  box-shadow: 3px 3px 0px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  z-index: 1;
+}
+
+.note.active {
+  z-index: 100;
+  box-shadow: 4px 4px 0px var(--text);
+}
+
+.note-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-fg);
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: grab;
+  min-height: 22px;
+  gap: 4px;
+}
+
+.note-titlebar:active {
+  cursor: grabbing;
+}
+
+.note-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-titlebar-buttons {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.note-btn {
+  font-family: var(--font);
+  font-size: 11px;
+  background: var(--toolbar-bg);
+  border: 1px outset var(--highlight);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 16px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.note-btn:hover {
+  background: #e0e0e0;
+}
+
+.note-btn:active {
+  border-style: inset;
+}
+
+.note-btn.locked {
+  color: #cc0000;
+}
+
+.note-body {
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.note-body.collapsed {
+  display: none;
+}
+
+.note-title-input {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-bottom: 1px dashed #999;
+  padding: 4px 6px;
+  background: #f0f0f0;
+  color: var(--text);
+  outline: none;
+  width: 100%;
+}
+
+.note-content {
+  font-family: var(--font);
+  font-size: 13px;
+  border: none;
+  padding: 6px;
+  background: var(--note-bg);
+  color: var(--text);
+  outline: none;
+  resize: none;
+  flex: 1;
+  min-height: 60px;
+  line-height: 1.5;
+  overflow-y: auto;
+}
+
+.note-content::placeholder {
+  color: #999;
+}
+
+.note-locked-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--shadow);
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  min-height: 60px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 8px,
+    #f5f5f5 8px,
+    #f5f5f5 16px
+  );
+}
+
+.note-locked-overlay:hover {
+  background-color: #e8e8e8;
+}
+
+.note-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 50%, var(--shadow) 50%, var(--shadow) 60%, transparent 60%),
+    linear-gradient(135deg, transparent 65%, var(--shadow) 65%, var(--shadow) 75%, transparent 75%),
+    linear-gradient(135deg, transparent 80%, var(--shadow) 80%, var(--shadow) 90%, transparent 90%);
+}
+
+.note-footer {
+  font-size: 10px;
+  color: #999;
+  padding: 2px 6px;
+  border-top: 1px solid #ddd;
+  text-align: right;
+  background: #f8f8f8;
+}
+
+/* ---- Modal ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal {
+  background: var(--toolbar-bg);
+  border: 2px outset var(--highlight);
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+  min-width: 300px;
+}
+
+.modal-titlebar {
+  background: var(--titlebar-bg);
+  color: var(--titlebar-fg);
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-close {
+  font-family: var(--font);
+  font-size: 11px;
+  background: var(--toolbar-bg);
+  border: 1px outset var(--highlight);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 3px;
+}
+
+.modal-body {
+  padding: 16px;
+}
+
+.modal-body p {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.modal-body input {
+  font-family: var(--font);
+  font-size: 13px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 2px inset var(--shadow);
+  background: var(--note-bg);
+  margin-bottom: 12px;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.modal-buttons button {
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--toolbar-bg);
+  border: 2px outset var(--highlight);
+  padding: 4px 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.modal-buttons button:active {
+  border-style: inset;
+}
+
+#modal-error {
+  color: #cc0000;
+  text-align: center;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---- Scrollbar styling (retro) ---- */
+#canvas-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+#canvas-container::-webkit-scrollbar-track {
+  background: var(--bg);
+  border: 1px solid var(--shadow);
+}
+
+#canvas-container::-webkit-scrollbar-thumb {
+  background: var(--toolbar-bg);
+  border: 2px outset var(--highlight);
+}
+
+/* ---- Selection prevention during drag ---- */
+body.dragging,
+body.dragging * {
+  user-select: none !important;
+  cursor: grabbing !important;
+}
+
+body.resizing,
+body.resizing * {
+  user-select: none !important;
+  cursor: nwse-resize !important;
+}
