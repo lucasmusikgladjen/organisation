@@ -34,6 +34,14 @@
   const modalMessage = document.getElementById('modal-message');
   const modalTitle = document.querySelector('.modal-title');
 
+  // New note modal refs
+  const newNoteOverlay = document.getElementById('new-note-overlay');
+  const newNoteTitle = document.getElementById('new-note-title');
+  const newNoteLocked = document.getElementById('new-note-locked');
+  const newNoteOk = document.getElementById('new-note-ok');
+  const newNoteCancel = document.getElementById('new-note-cancel');
+  const newNoteClose = document.querySelector('.new-note-close');
+
   // ---- Modal state ----
   let modalResolve = null;
 
@@ -120,7 +128,7 @@
 
     el.innerHTML = `
       <div class="note-titlebar">
-        <span class="note-title-text">${escapeHtml(title)}</span>
+        <input class="note-title-input" value="${escapeAttr(title)}" placeholder="untitled.txt" spellcheck="false">
         <div class="note-titlebar-buttons">
           ${isLocked ? '<span class="note-btn locked" title="Password protected">&#9911;</span>' : ''}
           <button class="note-btn btn-toggle" title="Minimize/Expand">_</button>
@@ -128,7 +136,6 @@
         </div>
       </div>
       <div class="note-body">
-        <input class="note-title-input" value="${escapeAttr(note.fields['Område'] || '')}" placeholder="title..." spellcheck="false">
         ${isLocked && !note._unlocked
           ? `<div class="note-locked-overlay">&#9911; click to unlock</div>`
           : `<textarea class="note-content" placeholder="type here..." spellcheck="false">${escapeHtml(note.fields['Anteckningar'] || '')}</textarea>`
@@ -298,7 +305,6 @@
       titleInput.addEventListener('input', () => {
         const val = titleInput.value;
         note.fields['Område'] = val;
-        el.querySelector('.note-title-text').textContent = val || 'untitled.txt';
         debounceSaveContent(note.id, { 'Område': val });
       });
     }
@@ -450,8 +456,51 @@
     showStatus('all saved');
   }
 
+  // ---- New note modal ----
+  function promptNewNote() {
+    return new Promise((resolve) => {
+      newNoteTitle.value = '';
+      newNoteLocked.checked = false;
+      newNoteOverlay.classList.remove('hidden');
+      newNoteTitle.focus();
+
+      function submit() {
+        cleanup();
+        resolve({ title: newNoteTitle.value, locked: newNoteLocked.checked });
+      }
+      function cancel() {
+        cleanup();
+        resolve(null);
+      }
+      function onKey(e) {
+        if (e.key === 'Enter') submit();
+        if (e.key === 'Escape') cancel();
+      }
+      function onOverlayClick(e) {
+        if (e.target === newNoteOverlay) cancel();
+      }
+      function cleanup() {
+        newNoteOverlay.classList.add('hidden');
+        newNoteOk.removeEventListener('click', submit);
+        newNoteCancel.removeEventListener('click', cancel);
+        newNoteClose.removeEventListener('click', cancel);
+        newNoteTitle.removeEventListener('keydown', onKey);
+        newNoteOverlay.removeEventListener('click', onOverlayClick);
+      }
+
+      newNoteOk.addEventListener('click', submit);
+      newNoteCancel.addEventListener('click', cancel);
+      newNoteClose.addEventListener('click', cancel);
+      newNoteTitle.addEventListener('keydown', onKey);
+      newNoteOverlay.addEventListener('click', onOverlayClick);
+    });
+  }
+
   // ---- Create new note ----
   async function createNote() {
+    const result = await promptNewNote();
+    if (result === null) return;
+
     // Find an empty spot
     const scrollLeft = canvas.parentElement.scrollLeft;
     const scrollTop = canvas.parentElement.scrollTop;
@@ -460,23 +509,26 @@
 
     try {
       showStatus('creating...');
-      const record = await api('POST', '/notes', {
-        fields: {
-          'Område': '',
-          'Anteckningar': '',
-          'Position X': String(x),
-          'Position Y': String(y),
-        },
-      });
+      const fields = {
+        'Område': result.title,
+        'Anteckningar': '',
+        'Position X': String(x),
+        'Position Y': String(y),
+      };
+      if (result.locked) {
+        fields['Lösenord'] = true;
+      }
+
+      const record = await api('POST', '/notes', { fields });
 
       const note = {
         id: record.id,
         fields: {
-          'Område': '',
+          'Område': result.title,
           'Anteckningar': '',
           'Position X': String(x),
           'Position Y': String(y),
-          'Lösenord': false,
+          'Lösenord': !!result.locked,
           ...(record.fields || {}),
         },
       };
@@ -487,9 +539,11 @@
       canvas.appendChild(el);
       showStatus('created');
 
-      // Focus the title input
-      const titleInput = el.querySelector('.note-title-input');
-      if (titleInput) titleInput.focus();
+      // Focus the content textarea if not locked
+      if (!result.locked) {
+        const textarea = el.querySelector('.note-content');
+        if (textarea) textarea.focus();
+      }
     } catch (err) {
       console.error('Failed to create note:', err);
       showStatus('create failed: ' + err.message);
