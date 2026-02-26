@@ -301,3 +301,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`note-canvas running on http://localhost:${PORT}`);
 });
+
+// Export for Vercel serverless
+module.exports = app;
