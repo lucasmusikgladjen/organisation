@@ -253,6 +253,7 @@
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       body.classList.toggle('collapsed');
+      el.classList.toggle('collapsed');
       btn.textContent = body.classList.contains('collapsed') ? '□' : '_';
     });
   }
