@@ -142,6 +142,21 @@ html, body {
 .note.collapsed {
   min-height: 0 !important;
   height: auto !important;
+  width: 120px !important;
+}
+
+.note-collapsed-art {
+  font-family: var(--font);
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--shadow);
+  text-align: center;
+  padding: 6px 4px;
+  background: var(--note-bg);
+  border-top: 1px solid #ddd;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
 }
 
 .note.active {
@@ -167,7 +182,7 @@ html, body {
   cursor: grabbing;
 }
 
-.note-titlebar .note-title-input {
+.note-titlebar .note-title-label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -175,23 +190,12 @@ html, body {
   font-family: var(--font);
   font-size: 12px;
   font-weight: 700;
-  background: transparent;
   color: var(--titlebar-fg);
-  border: none;
-  outline: none;
   padding: 0;
   margin: 0;
   min-width: 0;
   cursor: grab;
-}
-
-.note-titlebar .note-title-input:focus {
-  cursor: text;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.note-titlebar .note-title-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
 }
 
 .note-titlebar-buttons {
@@ -400,6 +404,32 @@ html, body {
   cursor: pointer;
   width: auto;
   margin: 0;
+}
+
+.color-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--shadow);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  font-size: 0;
+}
+
+.color-swatch:hover {
+  border-color: var(--text);
+}
+
+.color-swatch.selected {
+  border: 2px solid var(--highlight);
+  outline: 2px solid var(--text);
 }
 
 #modal-error {

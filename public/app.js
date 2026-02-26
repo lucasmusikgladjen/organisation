@@ -48,6 +48,15 @@
   const newNoteOk = document.getElementById('new-note-ok');
   const newNoteCancel = document.getElementById('new-note-cancel');
   const newNoteClose = document.querySelector('.new-note-close');
+  const newNoteColors = document.getElementById('new-note-colors');
+
+  // Color picker logic
+  newNoteColors.addEventListener('click', (e) => {
+    const swatch = e.target.closest('.color-swatch');
+    if (!swatch) return;
+    newNoteColors.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    swatch.classList.add('selected');
+  });
 
   // ---- Modal state ----
   let modalResolve = null;
@@ -132,10 +141,11 @@
 
     const isLocked = note.fields['Lösenord'];
     const title = note.fields['Område'] || 'untitled.txt';
+    const color = note.fields['Color'] || '#000080';
 
     el.innerHTML = `
-      <div class="note-titlebar">
-        <input class="note-title-input" value="${escapeAttr(title)}" placeholder="untitled.txt" spellcheck="false">
+      <div class="note-titlebar" style="background:${escapeAttr(color)}">
+        <span class="note-title-label">${escapeHtml(title)}</span>
         <div class="note-titlebar-buttons">
           ${isLocked ? '<span class="note-btn locked" title="Password protected">&#9911;</span>' : ''}
           <button class="note-btn btn-toggle" title="Minimize/Expand">_</button>
@@ -257,6 +267,57 @@
     });
   }
 
+  // ---- ASCII art for collapsed notes ----
+  const ASCII_ART = [
+    '  /\\_/\\\n ( o.o )\n  > ^ <',
+    '  ___\n |. .|\n |___|',
+    ' .--.\n |  |\n `--\'',
+    '  *  \n /|\\\n/ | \\',
+    ' ~^~^~\n  \\o/\n  /\\',
+    '  (\\(\\\n  (-.-)o\n  o_(")(") ',
+    '  [===]\n  |   |\n  `---\'',
+    '  ,___,\n  (o,o)\n  {`"\'}\n  -"-"-',
+    '   /|\n  / |\n /__|',
+    '  .oOo.\n  |   |\n  \'oOo\'',
+    ' __|__\n   |\n  /|\\',
+    '  (\\  /)\n  ( oo )\n   (  )',
+    '  ^^^^^\n < o o >\n  \\_^_/',
+    '  +---+\n  | # |\n  +---+',
+    '  .-"""-.\n /       \\\n `-.....-\'',
+    '  [_][_]\n  [_][_]\n  [_][_]',
+    '   /\\\n  /  \\\n /____\\',
+    '  d[ o ]b\n   |   |\n   |___|',
+    '  .-.\n (   )\n  `-\'',
+    '  ~*~*~\n  \\___/\n   \\_/',
+    '  >>=>>\n  >>=>>\n  >>=>>',
+    '  (o)(o)\n  /    \\\n  \\____/',
+    '  .===.\n  |===|\n  \'===\'',
+    '  /\\/\\\n  \\  /\n  /\\/\\',
+    '  |  |\n  |__|\n  (  )',
+    '  <\\\\>\n  <//>\n  <\\\\>',
+    '  ,  ,\n  |\\/|\n  \'  \'',
+    '  o  o\n  |\\/|\n  |  |',
+    '  {__}\n  (  )\n  /__\\',
+    '  .-==-.\n  | == |\n  \'-==-.\'',
+  ];
+
+  function showCollapsedArt(el) {
+    let artEl = el.querySelector('.note-collapsed-art');
+    if (!artEl) {
+      artEl = document.createElement('pre');
+      artEl.className = 'note-collapsed-art';
+      el.appendChild(artEl);
+    }
+    const idx = Math.floor(Math.random() * ASCII_ART.length);
+    artEl.textContent = ASCII_ART[idx];
+    artEl.style.display = '';
+  }
+
+  function hideCollapsedArt(el) {
+    const artEl = el.querySelector('.note-collapsed-art');
+    if (artEl) artEl.style.display = 'none';
+  }
+
   // ---- Toggle (collapse/expand) ----
   function setupNoteToggle(el, note) {
     const btn = el.querySelector('.btn-toggle');
@@ -264,9 +325,28 @@
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      const collapsing = !body.classList.contains('collapsed');
+
+      if (collapsing) {
+        // Save current dimensions before collapsing
+        el.dataset.expandedWidth = el.style.width || '';
+        el.dataset.expandedHeight = el.style.height || '';
+        // Reset to compact size
+        el.style.width = '';
+        el.style.height = '';
+        // Show ASCII art
+        showCollapsedArt(el);
+      } else {
+        // Restore saved dimensions
+        el.style.width = el.dataset.expandedWidth || '';
+        el.style.height = el.dataset.expandedHeight || '';
+        // Remove ASCII art
+        hideCollapsedArt(el);
+      }
+
       body.classList.toggle('collapsed');
       el.classList.toggle('collapsed');
-      btn.textContent = body.classList.contains('collapsed') ? '□' : '_';
+      btn.textContent = collapsing ? '□' : '_';
     });
   }
 
@@ -298,24 +378,11 @@
 
   // ---- Content editing ----
   function setupNoteContentEditing(el, note) {
-    const titleInput = el.querySelector('.note-title-input');
     const textarea = el.querySelector('.note-content');
 
-    // Allow selecting/typing in inputs without triggering drag
-    [titleInput, textarea].forEach(input => {
-      if (!input) return;
-      input.addEventListener('mousedown', (e) => e.stopPropagation());
-    });
-
-    if (titleInput) {
-      titleInput.addEventListener('input', () => {
-        const val = titleInput.value;
-        note.fields['Område'] = val;
-        debounceSaveContent(note.id, { 'Område': val });
-      });
-    }
-
     if (textarea) {
+      // Allow selecting/typing in textarea without triggering drag
+      textarea.addEventListener('mousedown', (e) => e.stopPropagation());
       textarea.addEventListener('input', () => {
         note.fields['Anteckningar'] = textarea.value;
         debounceSaveContent(note.id, { 'Anteckningar': textarea.value });
@@ -467,12 +534,18 @@
     return new Promise((resolve) => {
       newNoteTitle.value = '';
       newNoteLocked.checked = false;
+      // Reset color picker to default (first swatch)
+      newNoteColors.querySelectorAll('.color-swatch').forEach((s, i) => {
+        s.classList.toggle('selected', i === 0);
+      });
       newNoteOverlay.classList.remove('hidden');
       newNoteTitle.focus();
 
       function submit() {
+        const selectedSwatch = newNoteColors.querySelector('.color-swatch.selected');
+        const color = selectedSwatch ? selectedSwatch.dataset.color : '#000080';
         cleanup();
-        resolve({ title: newNoteTitle.value, locked: newNoteLocked.checked });
+        resolve({ title: newNoteTitle.value, locked: newNoteLocked.checked, color });
       }
       function cancel() {
         cleanup();
@@ -520,6 +593,7 @@
         'Anteckningar': '',
         'Position X': String(x),
         'Position Y': String(y),
+        'Color': result.color || '#000080',
       };
       if (result.locked) {
         fields['Lösenord'] = true;
@@ -535,6 +609,7 @@
           'Position X': String(x),
           'Position Y': String(y),
           'Lösenord': !!result.locked,
+          'Color': result.color || '#000080',
           ...(record.fields || {}),
         },
       };
@@ -570,18 +645,6 @@
     try {
       const data = await api('GET', '/notes');
       state.notes = data.records;
-
-      // Preserve unlock state from cache
-      if (cached) {
-        for (const note of state.notes) {
-          const cachedNote = cached.find(c => c.id === note.id);
-          if (cachedNote && cachedNote._unlocked) {
-            note._unlocked = true;
-            note.fields['Anteckningar'] = cachedNote.fields['Anteckningar'];
-          }
-        }
-      }
-
       saveCache();
       renderAllNotes();
       showStatus('synced');

@@ -148,6 +148,7 @@ app.get('/api/notes', async (req, res) => {
         'Position X': r.fields['Position X'] || '',
         'Position Y': r.fields['Position Y'] || '',
         'Lösenord': !!r.fields['Lösenord'],
+        'Color': r.fields['Color'] || '',
       },
     }));
 
