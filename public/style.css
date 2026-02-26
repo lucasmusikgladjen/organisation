@@ -7,16 +7,16 @@
 }
 
 :root {
-  --bg: #e0e0e0;
-  --note-bg: #ffffff;
-  --note-border: #000000;
-  --titlebar-bg: #000080;
-  --titlebar-fg: #ffffff;
-  --toolbar-bg: #d4d0c8;
-  --text: #000000;
-  --accent: #000080;
-  --shadow: #808080;
-  --highlight: #ffffff;
+  --bg: #1a0a2e;
+  --note-bg: #0d0d0d;
+  --note-border: #FF00FF;
+  --titlebar-bg: #FF00FF;
+  --titlebar-fg: #000000;
+  --toolbar-bg: #120825;
+  --text: #39FF14;
+  --accent: #00BFFF;
+  --shadow: #FF6EC7;
+  --highlight: #FFD700;
   --font: 'IBM Plex Mono', 'Courier New', Courier, monospace;
 }
 
@@ -147,13 +147,13 @@ html, body {
 
 .note-collapsed-art {
   font-family: var(--font);
-  font-size: 10px;
-  line-height: 1.2;
-  color: var(--shadow);
+  font-size: 9px;
+  line-height: 1.15;
+  color: var(--accent);
   text-align: center;
-  padding: 6px 4px;
+  padding: 8px 6px;
   background: var(--note-bg);
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--note-border);
   white-space: pre;
   pointer-events: none;
   user-select: none;
