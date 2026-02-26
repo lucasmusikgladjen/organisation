@@ -7,7 +7,7 @@
 }
 
 :root {
-  --bg: #c0c0c0;
+  --bg: #e0e0e0;
   --note-bg: #ffffff;
   --note-border: #000000;
   --titlebar-bg: #000080;
@@ -89,15 +89,15 @@ html, body {
       0deg,
       transparent,
       transparent 19px,
-      #b8b8b8 19px,
-      #b8b8b8 20px
+      #d0d0d0 19px,
+      #d0d0d0 20px
     ),
     repeating-linear-gradient(
       90deg,
       transparent,
       transparent 19px,
-      #b8b8b8 19px,
-      #b8b8b8 20px
+      #d0d0d0 19px,
+      #d0d0d0 20px
     );
   background-color: var(--bg);
 }
