@@ -173,8 +173,9 @@ app.post('/api/notes', async (req, res) => {
   }
 });
 
-// PATCH /api/notes/batch - Batch update positions (up to 10 records per Airtable limit)
-app.patch('/api/notes/batch', async (req, res) => {
+// PATCH/POST /api/notes/batch - Batch update (up to 10 records per Airtable limit)
+// POST is also accepted for sendBeacon compatibility (sendBeacon only sends POST)
+async function handleBatchUpdate(req, res) {
   try {
     const { records } = req.body;
     // Airtable allows max 10 records per batch update
@@ -189,7 +190,9 @@ app.patch('/api/notes/batch', async (req, res) => {
     console.error('Batch update error:', err);
     res.status(err.status || 500).json({ error: extractError(err) });
   }
-});
+}
+app.patch('/api/notes/batch', handleBatchUpdate);
+app.post('/api/notes/batch', handleBatchUpdate);
 
 // PATCH /api/notes/:id - Update a single note
 app.patch('/api/notes/:id', async (req, res) => {

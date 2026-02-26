@@ -20,10 +20,8 @@
   const ZOOM_STEP = 0.1;
 
   const CACHE_KEY = 'notecanvas_cache';
-  const SAVE_DEBOUNCE_MS = 3000;    // debounce content saves by 3s
-  const IDLE_SAVE_MS = 10000;        // save positions after 10s idle
-  let idleTimer = null;
-  let contentTimers = {};            // per-note debounce timers for content
+  const SYNC_DEBOUNCE_MS = 30000;    // batch sync after 30s of no changes
+  let syncTimer = null;
 
   // ---- DOM refs ----
   const canvas = document.getElementById('canvas');
@@ -226,7 +224,7 @@
           noteData.fields['Position Y'] = el.style.top.replace('px', '');
         }
         saveCache();
-        resetIdleTimer();
+        scheduleBatchSync();
       }
 
       document.addEventListener('mousemove', onMove);
@@ -407,31 +405,51 @@
     }
     Object.assign(state.dirtyContent.get(noteId), fields);
     saveCache();
-
-    // Debounce the API call
-    if (contentTimers[noteId]) clearTimeout(contentTimers[noteId]);
-    contentTimers[noteId] = setTimeout(() => {
-      flushContentSave(noteId);
-    }, SAVE_DEBOUNCE_MS);
+    scheduleBatchSync();
   }
 
-  async function flushContentSave(noteId) {
-    const fields = state.dirtyContent.get(noteId);
-    if (!fields) return;
-    state.dirtyContent.delete(noteId);
-    delete contentTimers[noteId];
+  // ---- Batch sync timer ----
+  function scheduleBatchSync() {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(flushAllDirty, SYNC_DEBOUNCE_MS);
+  }
+
+  async function flushAllDirty() {
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+    if (state.dirtyPositions.size === 0 && state.dirtyContent.size === 0) return;
+    if (state.saving) return;
+    state.saving = true;
+
+    // Merge all dirty data (positions + content) into one records array
+    const merged = new Map();
+    for (const [id, pos] of state.dirtyPositions) {
+      if (!merged.has(id)) merged.set(id, {});
+      Object.assign(merged.get(id), {
+        'Position X': String(pos.x),
+        'Position Y': String(pos.y),
+      });
+    }
+    for (const [id, fields] of state.dirtyContent) {
+      if (!merged.has(id)) merged.set(id, {});
+      Object.assign(merged.get(id), fields);
+    }
+
+    const records = [];
+    for (const [id, fields] of merged) {
+      records.push({ id, fields });
+    }
 
     try {
-      await api('PATCH', `/notes/${noteId}`, { fields });
-      showStatus('saved');
+      showStatus('syncing...');
+      await api('PATCH', '/notes/batch', { records });
+      state.dirtyPositions.clear();
+      state.dirtyContent.clear();
+      showStatus('synced');
     } catch (err) {
-      console.error('Failed to save content:', err);
-      showStatus('save failed!');
-      // Re-queue the dirty content
-      if (!state.dirtyContent.has(noteId)) {
-        state.dirtyContent.set(noteId, {});
-      }
-      Object.assign(state.dirtyContent.get(noteId), fields);
+      console.error('Batch sync failed:', err);
+      showStatus('sync failed!');
+    } finally {
+      state.saving = false;
     }
   }
 
@@ -487,56 +505,9 @@
     });
   }
 
-  // ---- Idle timer for batch position save ----
-  function resetIdleTimer() {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(flushPositions, IDLE_SAVE_MS);
-  }
-
-  async function flushPositions() {
-    if (state.dirtyPositions.size === 0) return;
-    if (state.saving) return;
-    state.saving = true;
-
-    const records = [];
-    for (const [id, pos] of state.dirtyPositions) {
-      records.push({
-        id,
-        fields: {
-          'Position X': String(pos.x),
-          'Position Y': String(pos.y),
-        },
-      });
-    }
-
-    try {
-      showStatus('saving positions...');
-      await api('PATCH', '/notes/batch', { records });
-      state.dirtyPositions.clear();
-      showStatus('positions saved');
-    } catch (err) {
-      console.error('Failed to save positions:', err);
-      showStatus('position save failed!');
-    } finally {
-      state.saving = false;
-    }
-  }
-
-  // Flush all dirty content saves
-  async function flushAllContent() {
-    const promises = [];
-    for (const [noteId] of state.dirtyContent) {
-      if (contentTimers[noteId]) clearTimeout(contentTimers[noteId]);
-      promises.push(flushContentSave(noteId));
-    }
-    await Promise.all(promises);
-  }
-
-  // Save everything
+  // Save everything (manual save button)
   async function saveAll() {
-    showStatus('saving...');
-    await Promise.all([flushPositions(), flushAllContent()]);
-    showStatus('all saved');
+    await flushAllDirty();
   }
 
   // ---- New note modal ----
@@ -765,36 +736,39 @@
   btnNew.addEventListener('click', createNote);
   btnSave.addEventListener('click', saveAll);
 
-  // Save before unload
+  // Save before unload — one unified batch beacon
   window.addEventListener('beforeunload', () => {
-    // Use sendBeacon for reliable save on tab close
-    if (state.dirtyPositions.size > 0) {
-      const records = [];
-      for (const [id, pos] of state.dirtyPositions) {
-        records.push({
-          id,
-          fields: { 'Position X': String(pos.x), 'Position Y': String(pos.y) },
-        });
-      }
-      navigator.sendBeacon('/api/notes/batch', new Blob(
-        [JSON.stringify({ records })],
-        { type: 'application/json' }
-      ));
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+    if (state.dirtyPositions.size === 0 && state.dirtyContent.size === 0) return;
+
+    const merged = new Map();
+    for (const [id, pos] of state.dirtyPositions) {
+      if (!merged.has(id)) merged.set(id, {});
+      Object.assign(merged.get(id), {
+        'Position X': String(pos.x),
+        'Position Y': String(pos.y),
+      });
+    }
+    for (const [id, fields] of state.dirtyContent) {
+      if (!merged.has(id)) merged.set(id, {});
+      Object.assign(merged.get(id), fields);
     }
 
-    // Also try to save content
-    for (const [noteId, fields] of state.dirtyContent) {
-      navigator.sendBeacon(`/api/notes/${noteId}`, new Blob(
-        [JSON.stringify({ fields })],
-        { type: 'application/json' }
-      ));
+    const records = [];
+    for (const [id, fields] of merged) {
+      records.push({ id, fields });
     }
+
+    navigator.sendBeacon('/api/notes/batch', new Blob(
+      [JSON.stringify({ records })],
+      { type: 'application/json' }
+    ));
   });
 
   // Save on visibility change (user switches tab)
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      saveAll();
+      flushAllDirty();
     }
   });
 
