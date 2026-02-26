@@ -76,6 +76,17 @@ html, body {
   margin-left: 4px;
 }
 
+#zoom-indicator {
+  font-size: 11px;
+  color: var(--text);
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px inset var(--shadow);
+  background: var(--note-bg);
+  cursor: default;
+  user-select: none;
+}
+
 /* ---- Canvas ---- */
 #canvas-container {
   position: fixed;
@@ -102,10 +113,16 @@ html, body {
   background-color: var(--bg);
 }
 
+#canvas-scroller {
+  width: 4000px;
+  height: 4000px;
+}
+
 #canvas {
   position: relative;
   width: 4000px;
   height: 4000px;
+  transform-origin: 0 0;
 }
 
 /* ---- Note ---- */
