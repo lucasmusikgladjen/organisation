@@ -20,8 +20,13 @@
   const ZOOM_STEP = 0.1;
 
   const CACHE_KEY = 'notecanvas_cache';
+  const DIRTY_KEY = 'notecanvas_dirty';
   const SYNC_DEBOUNCE_MS = 30000;    // batch sync after 30s of no changes
+  const SAVE_TIMEOUT_MS = 30000;     // safety timeout for hung save requests
+  const MAX_SYNC_RETRIES = 3;        // stop auto-retrying after this many consecutive failures
   let syncTimer = null;
+  let saveTimeoutTimer = null;
+  let consecutiveSyncFailures = 0;
 
   // ---- DOM refs ----
   const canvas = document.getElementById('canvas');
@@ -92,6 +97,50 @@
       if (cached) return JSON.parse(cached);
     } catch (_) { /* ignore */ }
     return null;
+  }
+
+  // ---- Dirty state persistence (crash recovery) ----
+  function persistDirtyState() {
+    try {
+      if (state.dirtyPositions.size === 0 && state.dirtyContent.size === 0) {
+        localStorage.removeItem(DIRTY_KEY);
+        return;
+      }
+      const dirty = {
+        positions: Object.fromEntries(state.dirtyPositions),
+        content: Object.fromEntries(state.dirtyContent),
+        ts: Date.now(),
+      };
+      localStorage.setItem(DIRTY_KEY, JSON.stringify(dirty));
+    } catch (_) { /* quota exceeded, ignore */ }
+  }
+
+  function restoreDirtyState() {
+    try {
+      const saved = localStorage.getItem(DIRTY_KEY);
+      if (!saved) return;
+      const { positions, content, ts } = JSON.parse(saved);
+      // Ignore dirty state older than 5 minutes (likely stale)
+      if (ts && Date.now() - ts > 5 * 60 * 1000) {
+        localStorage.removeItem(DIRTY_KEY);
+        return;
+      }
+      if (positions) {
+        for (const [id, pos] of Object.entries(positions)) {
+          if (!state.dirtyPositions.has(id)) {
+            state.dirtyPositions.set(id, pos);
+          }
+        }
+      }
+      if (content) {
+        for (const [id, fields] of Object.entries(content)) {
+          if (!state.dirtyContent.has(id)) {
+            state.dirtyContent.set(id, fields);
+          }
+        }
+      }
+      localStorage.removeItem(DIRTY_KEY);
+    } catch (_) { /* ignore */ }
   }
 
   // ---- Password modal ----
@@ -224,6 +273,7 @@
           noteData.fields['Position Y'] = el.style.top.replace('px', '');
         }
         saveCache();
+        consecutiveSyncFailures = 0;
         scheduleBatchSync();
       }
 
@@ -405,6 +455,8 @@
     }
     Object.assign(state.dirtyContent.get(noteId), fields);
     saveCache();
+    // New user activity resets retry budget so fresh edits get a fair attempt
+    consecutiveSyncFailures = 0;
     scheduleBatchSync();
   }
 
@@ -417,19 +469,30 @@
   async function flushAllDirty() {
     if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
     if (state.dirtyPositions.size === 0 && state.dirtyContent.size === 0) return;
-    if (state.saving) return;
+    if (state.saving) {
+      // Re-schedule instead of silently dropping pending changes
+      scheduleBatchSync();
+      return;
+    }
     state.saving = true;
 
-    // Merge all dirty data (positions + content) into one records array
+    // Snapshot what we're about to send so edits during the request aren't lost
+    const sentPositions = new Map(state.dirtyPositions);
+    const sentContent = new Map();
+    for (const [id, fields] of state.dirtyContent) {
+      sentContent.set(id, { ...fields });
+    }
+
+    // Merge snapshots into one records array
     const merged = new Map();
-    for (const [id, pos] of state.dirtyPositions) {
+    for (const [id, pos] of sentPositions) {
       if (!merged.has(id)) merged.set(id, {});
       Object.assign(merged.get(id), {
         'Position X': String(pos.x),
         'Position Y': String(pos.y),
       });
     }
-    for (const [id, fields] of state.dirtyContent) {
+    for (const [id, fields] of sentContent) {
       if (!merged.has(id)) merged.set(id, {});
       Object.assign(merged.get(id), fields);
     }
@@ -439,16 +502,86 @@
       records.push({ id, fields });
     }
 
+    // Safety timeout: if request hangs, unblock saving after SAVE_TIMEOUT_MS
+    saveTimeoutTimer = setTimeout(() => {
+      if (state.saving) {
+        console.warn('Save timed out — unblocking sync');
+        state.saving = false;
+        persistDirtyState();
+        consecutiveSyncFailures++;
+        if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+          showStatus('sync timeout, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+          scheduleBatchSync();
+        } else {
+          showStatus('sync timed out — click save to retry');
+        }
+      }
+    }, SAVE_TIMEOUT_MS);
+
     try {
       showStatus('syncing...');
-      await api('PATCH', '/notes/batch', { records });
-      state.dirtyPositions.clear();
-      state.dirtyContent.clear();
-      showStatus('synced');
+      const result = await api('PATCH', '/notes/batch', { records });
+
+      // Handle partial success: only clear dirty state for records that succeeded
+      const savedIds = new Set((result.records || []).map(r => r.id));
+
+      for (const id of savedIds) {
+        // Only clear position if it hasn't been updated since we started saving
+        const currentPos = state.dirtyPositions.get(id);
+        const sentPos = sentPositions.get(id);
+        if (sentPos && currentPos &&
+            currentPos.x === sentPos.x && currentPos.y === sentPos.y) {
+          state.dirtyPositions.delete(id);
+        }
+
+        // Only clear content fields if they haven't been updated since we started saving
+        const currentFields = state.dirtyContent.get(id);
+        const sentFields = sentContent.get(id);
+        if (sentFields && currentFields) {
+          let allFieldsClean = true;
+          for (const key of Object.keys(sentFields)) {
+            if (currentFields[key] !== sentFields[key]) {
+              allFieldsClean = false;
+              break;
+            }
+          }
+          if (allFieldsClean) {
+            state.dirtyContent.delete(id);
+          }
+        } else if (sentFields && !currentFields) {
+          // Content was cleared during save — nothing to remove
+        }
+      }
+
+      // Report partial failures
+      if (result.errors && result.errors.length > 0) {
+        console.error('Partial sync failures:', result.errors);
+        persistDirtyState();
+        consecutiveSyncFailures++;
+        if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+          showStatus('partially synced, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+          scheduleBatchSync();
+        } else {
+          showStatus('sync partially failed — click save to retry');
+        }
+      } else {
+        consecutiveSyncFailures = 0;
+        showStatus('synced');
+        persistDirtyState(); // clears dirty key if maps are now empty
+      }
     } catch (err) {
       console.error('Batch sync failed:', err);
-      showStatus('sync failed!');
+      persistDirtyState();
+      consecutiveSyncFailures++;
+      if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+        showStatus('sync failed, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+        scheduleBatchSync();
+      } else {
+        showStatus('sync failed — click save to retry');
+      }
     } finally {
+      clearTimeout(saveTimeoutTimer);
+      saveTimeoutTimer = null;
       state.saving = false;
     }
   }
@@ -505,8 +638,9 @@
     });
   }
 
-  // Save everything (manual save button)
+  // Save everything (manual save button — resets retry counter)
   async function saveAll() {
+    consecutiveSyncFailures = 0;
     await flushAllDirty();
   }
 
@@ -637,6 +771,14 @@
         showStatus('offline mode: ' + err.message);
       }
     }
+
+    // Recover any unsaved dirty state from a previous session (crash recovery)
+    restoreDirtyState();
+    if (state.dirtyPositions.size > 0 || state.dirtyContent.size > 0) {
+      console.log('Recovered unsaved changes, syncing...');
+      showStatus('recovering unsaved changes...');
+      flushAllDirty();
+    }
   }
 
   function renderAllNotes() {
@@ -737,8 +879,13 @@
   btnSave.addEventListener('click', saveAll);
 
   // Save before unload — one unified batch beacon
+  // Also persist dirty state to localStorage as fallback in case beacon fails
   window.addEventListener('beforeunload', () => {
     if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+
+    // Always persist dirty state as a safety net (beacon may fail silently)
+    persistDirtyState();
+
     if (state.dirtyPositions.size === 0 && state.dirtyContent.size === 0) return;
 
     const merged = new Map();
@@ -759,10 +906,18 @@
       records.push({ id, fields });
     }
 
-    navigator.sendBeacon('/api/notes/batch', new Blob(
-      [JSON.stringify({ records })],
-      { type: 'application/json' }
-    ));
+    const payload = JSON.stringify({ records });
+    // sendBeacon has a ~64KB limit — check before sending
+    if (payload.length <= 64000) {
+      navigator.sendBeacon('/api/notes/batch', new Blob(
+        [payload],
+        { type: 'application/json' }
+      ));
+    } else {
+      // Payload too large for beacon — dirty state is already persisted
+      // to localStorage above, so it will be recovered on next load
+      console.warn('Beacon payload too large (' + payload.length + ' bytes), relying on dirty state recovery');
+    }
   });
 
   // Save on visibility change (user switches tab)
@@ -771,6 +926,9 @@
       flushAllDirty();
     }
   });
+
+  // Periodically persist dirty state to localStorage (crash recovery)
+  setInterval(persistDirtyState, 5000);
 
   // ---- Boot ----
   loadNotes();
