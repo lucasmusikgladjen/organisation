@@ -23,8 +23,10 @@
   const DIRTY_KEY = 'notecanvas_dirty';
   const SYNC_DEBOUNCE_MS = 30000;    // batch sync after 30s of no changes
   const SAVE_TIMEOUT_MS = 30000;     // safety timeout for hung save requests
+  const MAX_SYNC_RETRIES = 3;        // stop auto-retrying after this many consecutive failures
   let syncTimer = null;
   let saveTimeoutTimer = null;
+  let consecutiveSyncFailures = 0;
 
   // ---- DOM refs ----
   const canvas = document.getElementById('canvas');
@@ -271,6 +273,7 @@
           noteData.fields['Position Y'] = el.style.top.replace('px', '');
         }
         saveCache();
+        consecutiveSyncFailures = 0;
         scheduleBatchSync();
       }
 
@@ -452,6 +455,8 @@
     }
     Object.assign(state.dirtyContent.get(noteId), fields);
     saveCache();
+    // New user activity resets retry budget so fresh edits get a fair attempt
+    consecutiveSyncFailures = 0;
     scheduleBatchSync();
   }
 
@@ -502,9 +507,14 @@
       if (state.saving) {
         console.warn('Save timed out — unblocking sync');
         state.saving = false;
-        showStatus('sync timeout!');
         persistDirtyState();
-        scheduleBatchSync();
+        consecutiveSyncFailures++;
+        if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+          showStatus('sync timeout, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+          scheduleBatchSync();
+        } else {
+          showStatus('sync timed out — click save to retry');
+        }
       }
     }, SAVE_TIMEOUT_MS);
 
@@ -546,20 +556,29 @@
       // Report partial failures
       if (result.errors && result.errors.length > 0) {
         console.error('Partial sync failures:', result.errors);
-        showStatus('partially synced (' + result.errors.length + ' failed)');
-        // Failed IDs remain dirty and will be retried on next sync
         persistDirtyState();
-        scheduleBatchSync();
+        consecutiveSyncFailures++;
+        if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+          showStatus('partially synced, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+          scheduleBatchSync();
+        } else {
+          showStatus('sync partially failed — click save to retry');
+        }
       } else {
+        consecutiveSyncFailures = 0;
         showStatus('synced');
         persistDirtyState(); // clears dirty key if maps are now empty
       }
     } catch (err) {
       console.error('Batch sync failed:', err);
-      showStatus('sync failed!');
       persistDirtyState();
-      // Retry after a delay
-      scheduleBatchSync();
+      consecutiveSyncFailures++;
+      if (consecutiveSyncFailures < MAX_SYNC_RETRIES) {
+        showStatus('sync failed, retrying... (' + consecutiveSyncFailures + '/' + MAX_SYNC_RETRIES + ')');
+        scheduleBatchSync();
+      } else {
+        showStatus('sync failed — click save to retry');
+      }
     } finally {
       clearTimeout(saveTimeoutTimer);
       saveTimeoutTimer = null;
@@ -619,8 +638,9 @@
     });
   }
 
-  // Save everything (manual save button)
+  // Save everything (manual save button — resets retry counter)
   async function saveAll() {
+    consecutiveSyncFailures = 0;
     await flushAllDirty();
   }
 
