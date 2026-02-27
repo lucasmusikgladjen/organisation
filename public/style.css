@@ -100,15 +100,15 @@ html, body {
       0deg,
       transparent,
       transparent 19px,
-      #d0d0d0 19px,
-      #d0d0d0 20px
+      #e0e0e0 19px,
+      #e0e0e0 20px
     ),
     repeating-linear-gradient(
       90deg,
       transparent,
       transparent 19px,
-      #d0d0d0 19px,
-      #d0d0d0 20px
+      #e0e0e0 19px,
+      #e0e0e0 20px
     );
   background-color: var(--bg);
 }
