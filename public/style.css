@@ -443,20 +443,33 @@ html, body {
   display: none !important;
 }
 
-/* ---- Scrollbar styling (retro) ---- */
-#canvas-container::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
+/* ---- Scrollbar styling (thin) ---- */
+#canvas-container,
+.note-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--shadow) transparent;
 }
 
-#canvas-container::-webkit-scrollbar-track {
-  background: var(--bg);
-  border: 1px solid var(--shadow);
+#canvas-container::-webkit-scrollbar,
+.note-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-#canvas-container::-webkit-scrollbar-thumb {
-  background: var(--toolbar-bg);
-  border: 2px outset var(--highlight);
+#canvas-container::-webkit-scrollbar-track,
+.note-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#canvas-container::-webkit-scrollbar-thumb,
+.note-content::-webkit-scrollbar-thumb {
+  background: var(--shadow);
+  border-radius: 3px;
+}
+
+#canvas-container::-webkit-scrollbar-thumb:hover,
+.note-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text);
 }
 
 /* ---- Selection prevention during drag ---- */
