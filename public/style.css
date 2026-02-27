@@ -142,7 +142,7 @@ html, body {
 .note.collapsed {
   min-height: 0 !important;
   height: auto !important;
-  width: 120px !important;
+  width: 280px !important;
 }
 
 .note-collapsed-art {
