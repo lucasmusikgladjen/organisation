@@ -169,6 +169,8 @@ app.get('/api/notes', async (req, res) => {
         'Anteckningar': r.fields['Lösenord'] ? '' : (r.fields['Anteckningar'] || ''),
         'Position X': r.fields['Position X'] || '',
         'Position Y': r.fields['Position Y'] || '',
+        'Size W': r.fields['Size W'] || '',
+        'Size H': r.fields['Size H'] || '',
         'Lösenord': !!r.fields['Lösenord'],
         'Color': r.fields['Color'] || '',
       },

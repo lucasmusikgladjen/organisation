@@ -186,6 +186,11 @@
     el.style.left = x + 'px';
     el.style.top = y + 'px';
 
+    const w = parseInt(note.fields['Size W']);
+    const h = parseInt(note.fields['Size H']);
+    if (w) el.style.width = w + 'px';
+    if (h) el.style.height = h + 'px';
+
     const isLocked = note.fields['Lösenord'];
     const title = note.fields['Område'] || 'untitled.txt';
     const color = note.fields['Color'] || '#000080';
@@ -259,9 +264,11 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
 
-        // Mark position as dirty
+        // Mark position as dirty (preserve any pending size data)
         const noteId = el.dataset.id;
+        const existing = state.dirtyPositions.get(noteId) || {};
         state.dirtyPositions.set(noteId, {
+          ...existing,
           x: parseInt(el.style.left),
           y: parseInt(el.style.top),
         });
@@ -308,6 +315,25 @@
         document.body.classList.remove('resizing');
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+
+        // Mark size as dirty
+        const noteId = el.dataset.id;
+        const existing = state.dirtyPositions.get(noteId) || {};
+        state.dirtyPositions.set(noteId, {
+          ...existing,
+          w: parseInt(el.style.width),
+          h: parseInt(el.style.height),
+        });
+
+        // Update local state
+        const noteData = state.notes.find(n => n.id === noteId);
+        if (noteData) {
+          noteData.fields['Size W'] = el.style.width.replace('px', '');
+          noteData.fields['Size H'] = el.style.height.replace('px', '');
+        }
+        saveCache();
+        consecutiveSyncFailures = 0;
+        scheduleBatchSync();
       }
 
       document.addEventListener('mousemove', onMove);
@@ -487,10 +513,11 @@
     const merged = new Map();
     for (const [id, pos] of sentPositions) {
       if (!merged.has(id)) merged.set(id, {});
-      Object.assign(merged.get(id), {
-        'Position X': String(pos.x),
-        'Position Y': String(pos.y),
-      });
+      const fields = merged.get(id);
+      if (pos.x !== undefined) fields['Position X'] = String(pos.x);
+      if (pos.y !== undefined) fields['Position Y'] = String(pos.y);
+      if (pos.w !== undefined) fields['Size W'] = String(pos.w);
+      if (pos.h !== undefined) fields['Size H'] = String(pos.h);
     }
     for (const [id, fields] of sentContent) {
       if (!merged.has(id)) merged.set(id, {});
@@ -530,7 +557,8 @@
         const currentPos = state.dirtyPositions.get(id);
         const sentPos = sentPositions.get(id);
         if (sentPos && currentPos &&
-            currentPos.x === sentPos.x && currentPos.y === sentPos.y) {
+            currentPos.x === sentPos.x && currentPos.y === sentPos.y &&
+            currentPos.w === sentPos.w && currentPos.h === sentPos.h) {
           state.dirtyPositions.delete(id);
         }
 
@@ -891,10 +919,11 @@
     const merged = new Map();
     for (const [id, pos] of state.dirtyPositions) {
       if (!merged.has(id)) merged.set(id, {});
-      Object.assign(merged.get(id), {
-        'Position X': String(pos.x),
-        'Position Y': String(pos.y),
-      });
+      const fields = merged.get(id);
+      if (pos.x !== undefined) fields['Position X'] = String(pos.x);
+      if (pos.y !== undefined) fields['Position Y'] = String(pos.y);
+      if (pos.w !== undefined) fields['Size W'] = String(pos.w);
+      if (pos.h !== undefined) fields['Size H'] = String(pos.h);
     }
     for (const [id, fields] of state.dirtyContent) {
       if (!merged.has(id)) merged.set(id, {});
