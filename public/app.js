@@ -473,8 +473,9 @@
           e.preventDefault();
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
-          textarea.value = textarea.value.substring(0, start) + '\t' + textarea.value.substring(end);
-          textarea.selectionStart = textarea.selectionEnd = start + 1;
+          const spaces = '     ';
+          textarea.value = textarea.value.substring(0, start) + spaces + textarea.value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + spaces.length;
           // Trigger save
           note.fields['Anteckningar'] = textarea.value;
           debounceSaveContent(note.id, { 'Anteckningar': textarea.value });
