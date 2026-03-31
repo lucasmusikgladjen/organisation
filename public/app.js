@@ -467,6 +467,19 @@
     if (textarea) {
       // Allow selecting/typing in textarea without triggering drag
       textarea.addEventListener('mousedown', (e) => e.stopPropagation());
+      // Tab key inserts a tab character instead of moving focus
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          textarea.value = textarea.value.substring(0, start) + '\t' + textarea.value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + 1;
+          // Trigger save
+          note.fields['Anteckningar'] = textarea.value;
+          debounceSaveContent(note.id, { 'Anteckningar': textarea.value });
+        }
+      });
       textarea.addEventListener('input', () => {
         note.fields['Anteckningar'] = textarea.value;
         debounceSaveContent(note.id, { 'Anteckningar': textarea.value });
