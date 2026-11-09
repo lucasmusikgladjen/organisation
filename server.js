@@ -40,6 +40,48 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Public page: personal letter to Consid
+app.get('/personligt-brev-consid', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'personligt-brev-consid.html'));
+});
+
+// ---- Auth: the whole note canvas requires the password ----
+// The cookie holds an HMAC derived from NOTE_PASSWORD, so it works on
+// stateless serverless instances and is invalidated if the password changes.
+const crypto = require('crypto');
+const AUTH_COOKIE = 'notes_auth';
+
+function authToken() {
+  return crypto.createHmac('sha256', String(NOTE_PASSWORD)).update('notes-auth').digest('hex');
+}
+
+function isAuthenticated(req) {
+  if (!NOTE_PASSWORD) return false;
+  const cookies = req.headers.cookie || '';
+  const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(AUTH_COOKIE + '='));
+  return !!match && match.slice(AUTH_COOKIE.length + 1) === authToken();
+}
+
+// POST /api/login - Verify password and set a session cookie
+app.post('/api/login', (req, res) => {
+  const { password } = req.body || {};
+  if (!NOTE_PASSWORD || password !== NOTE_PASSWORD) {
+    return res.status(403).json({ error: 'Fel lösenord' });
+  }
+  const secure = req.headers['x-forwarded-proto'] === 'https' || req.secure;
+  res.setHeader('Set-Cookie',
+    `${AUTH_COOKIE}=${authToken()}; Path=/api; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}`);
+  res.json({ ok: true });
+});
+
+// Every /api/notes* endpoint requires a valid login
+app.use('/api/notes', (req, res, next) => {
+  if (!isAuthenticated(req)) {
+    return res.status(401).json({ error: 'Inte inloggad' });
+  }
+  next();
+});
+
 // Helper: extract useful error message from Airtable errors
 function extractError(err) {
   if (err.body) {

@@ -8,6 +8,14 @@ Applikationen använder Airtable som databas via deras REST API. Alla anrop går
 
 ## Alla API-endpoints och deras Airtable-anrop
 
+### 0. `POST /api/login` — Logga in
+
+**Airtable-anrop:** Inga — kontrollerar lösenordet mot `NOTE_PASSWORD` och sätter en HttpOnly-cookie (`notes_auth`).
+
+- Alla `/api/notes*`-endpoints kräver denna cookie och svarar annars `401`.
+- Frontend frågar alltid efter lösenord vid sidladdning innan något visas.
+- **Antal anrop:** 0
+
 ### 1. `GET /api/notes` — Hämta alla anteckningar
 
 **Airtable-anrop:** `GET https://api.airtable.com/v0/{BASE_ID}/{TABLE_ID}`

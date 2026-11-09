@@ -973,6 +973,26 @@
   // Periodically persist dirty state to localStorage (crash recovery)
   setInterval(persistDirtyState, 5000);
 
+  // ---- Login (required before anything is loaded or shown) ----
+  async function login() {
+    let error = null;
+    while (true) {
+      const pending = promptPassword('Ange lösenord för att öppna anteckningarna:');
+      if (error) {
+        modalError.textContent = '* ' + error + ' *';
+        modalError.classList.remove('hidden');
+      }
+      const password = await pending;
+      if (!password) { error = null; continue; } // cannot be dismissed
+      try {
+        await api('POST', '/login', { password });
+        return;
+      } catch (err) {
+        error = err.message;
+      }
+    }
+  }
+
   // ---- Boot ----
-  loadNotes();
+  login().then(loadNotes);
 })();
